@@ -21,7 +21,7 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 script_directory = os.path.dirname(os.path.abspath(__file__))
-os.chdir(script_directory)
+# os.chdir(script_directory) # Remove this line
 
 DATABASE_FILE = resource_path("customer_data.db")
 PAKISTAN_POST_LOGO = resource_path("pakistan_post_logo.png")
@@ -68,23 +68,25 @@ def load_data():
 
 def save_data():
     try:
-        filepath = filedialog.asksaveasfilename(defaultextension=".csv",
-                                                filetypes=[("CSV files", "*.csv"), ("All files", "*.*")])
+        filepath = filedialog.asksaveasfilename(
+            defaultextension=".csv", filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+        )
         if not filepath:
             return
 
         with open(filepath, "w", newline="") as file:
             writer = csv.writer(file)
             writer.writerows(data_list)
-        print(f"Saved {len(data_list)} records to {filepath}")
+        print(f"save_data: Saving to filepath = {filepath}")
     except Exception as e:
         messagebox.showerror("Error", f"Error saving data: {e}")
 
 def import_data():
     global data_list
     try:
-        filepath = filedialog.askopenfilename(defaultextension=".csv",
-                                              filetypes=[("CSV files", "*.csv"), ("All files", "*.*")])
+        filepath = filedialog.askopenfilename(
+            defaultextension=".csv", filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+        )
         if not filepath:
             return
 
@@ -120,10 +122,13 @@ def add_data():
     try:
         conn = sqlite3.connect(DATABASE_FILE)
         cursor = conn.cursor()
-        cursor.execute(f"""
+        cursor.execute(
+            f"""
             INSERT INTO {TABLE_NAME} (name, address, city, phone, price, timestamp)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (name, address, city, phone, price, timestamp))
+        """,
+            (name, address, city, phone, price, timestamp),
+        )
         conn.commit()
         conn.close()
         load_data()
@@ -137,11 +142,19 @@ def update_table():
     print("Updating the table...")
     for row in tree.get_children():
         tree.delete(row)
-    for i, data in enumerate(data_list):
-        if len(data) > 5:
-            print(f"Inserting data: {data[:5]}")
-            tree.insert("", "end", values=(i + 1, *data[:5]))
-    print("Table update complete.")
+    try:
+        conn = sqlite3.connect(DATABASE_FILE)
+        cursor = conn.cursor()
+        cursor.execute(f"SELECT name, address, city, phone, price, timestamp FROM {TABLE_NAME}")
+        data_list = [list(row) for row in cursor.fetchall()]  # Fetch data from the database
+        conn.close()
+        for i, data in enumerate(data_list):
+            if len(data) > 5:
+                print(f"Inserting data: {data[:5]}")
+                tree.insert("", "end", values=(i + 1, *data[:5]))
+        print("Table update complete.")
+    except Exception as e:
+        messagebox.showerror("Error", f"Error updating table: {e}")
 
 def clear_fields():
     entry_name.delete(0, tk.END)
@@ -160,14 +173,22 @@ def generate_pdf_selected():
         index = int(tree.item(item, "values")[0]) - 1
         selected_data.append(data_list[index])
 
-    generate_pdf(selected_data, "customer_data_selected.pdf")
+    filename = filedialog.asksaveasfilename(
+        defaultextension=".pdf", filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")]
+    )
+    if filename:
+        generate_pdf(selected_data, filename)
 
 def generate_pdf_all():
     if not data_list:
         messagebox.showwarning("Warning", "No data to generate PDF!")
         return
 
-    generate_pdf(data_list, "customer_data_all.pdf")
+    filename = filedialog.asksaveasfilename(
+        defaultextension=".pdf", filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")]
+    )
+    if filename:
+        generate_pdf(data_list, filename)
 
 def generate_pdf_today():
     today = datetime.date.today()
@@ -185,94 +206,102 @@ def generate_pdf_today():
         messagebox.showwarning("Warning", "No data for today to generate PDF!")
         return
 
-    generate_pdf(today_data, "customer_data_today.pdf")
+    filename = filedialog.asksaveasfilename(
+        defaultextension=".pdf", filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")]
+    )
+    if filename:
+        generate_pdf(today_data, filename)
 
 def generate_pdf(data_to_print, filename):
     if not data_to_print:
         messagebox.showwarning("Warning", "No data to generate PDF!")
         return
 
-    pdf_file = filename
-    c = canvas.Canvas(pdf_file, pagesize=A4)
-    width, height = A4
-      # NEW BOX dimensions:
-    new_box_height = 20  # Height in points
-    new_box_width = 4 * 72
-    start_x = 50
-    start_y = height - 100
-    logo_top_padding = 20
-    start_y += logo_top_padding
-    line_height = 14
-    box_width = 250
-    box_height = 110
-    text_vertical_offset = 35
-    box_spacing = 20
+    print(f"generate_pdf: Generating PDF to pdf_file = {filename}")  # Add this line for debugging
+    try:
+        c = canvas.Canvas(filename, pagesize=A4)
+        width, height = A4
+        # NEW BOX dimensions:
+        new_box_height = 20  # Height in points
+        new_box_width = 4 * 72
+        start_x = 50
+        start_y = height - 100
+        logo_top_padding = 20
+        start_y += logo_top_padding
+        line_height = 14
+        box_width = 250
+        box_height = 110
+        text_vertical_offset = 35
+        box_spacing = 20
 
-    to_x = start_x + 10
-    from_x = start_x + box_width + box_spacing + 10
-    from reportlab.lib.units import inch
-    for data in data_to_print:
-        current_y = start_y  # Initialize current_y for each entry
-    
-        # Draw Pakistan Post logo
-        c.drawImage("pakistan_post_logo.png", start_x, current_y, width=500, height=50)  # Correct the path
+        to_x = start_x + 10
+        from_x = start_x + box_width + box_spacing + 10
+        from reportlab.lib.units import inch
+        for data in data_to_print:
+            current_y = start_y  # Initialize current_y for each entry
 
-        # V.P.L Price
-        c.setFont("Helvetica-Bold", 12)
-        c.drawString(start_x + 5, current_y  - 18, f"V.P.L Rs: {data[4]}") #Removed 20
+            # Draw Pakistan Post logo
+            c.drawImage(PAKISTAN_POST_LOGO, start_x, current_y, width=500, height=50)  # Correct the path
 
-        # --- Draw Boxes ---
-        c.setStrokeColor(colors.black)
+            # V.P.L Price
+            c.setFont("Helvetica-Bold", 12)
+            c.drawString(start_x + 5, current_y - 18, f"V.P.L Rs: {data[4]}")  # Removed 20
 
-        box_y = current_y - 35 - box_height
+            # --- Draw Boxes ---
+            c.setStrokeColor(colors.black)
 
-         # NEW BOX: Draw the new box ABOVE the "To" and "From" boxes
-        new_box_y = box_y + box_height + 10  # Position it above, add a 10-point gap. Adjust as needed
+            box_y = current_y - 35 - box_height
 
-        c.rect(start_x, new_box_y, new_box_width, new_box_height)  # NEW B
+            # NEW BOX: Draw the new box ABOVE the "To" and "From" boxes
+            new_box_y = box_y + box_height + 10  # Position it above, add a 10-point gap. Adjust as needed
 
-        c.rect(start_x, box_y, box_width, box_height)  # "To" Box
-        c.rect(start_x + box_width + box_spacing, box_y, box_width, box_height)  # "From" Box
+            c.rect(start_x, new_box_y, new_box_width, new_box_height)  # NEW B
 
-        # --- "To" Section ---
-        c.setFont("Helvetica", 10)
-        to_x = start_x + 10  # X position for "To:" label
-        c.drawString(to_x, box_y + box_height - text_vertical_offset, "To:")
-        c.drawString(to_x, box_y + box_height - text_vertical_offset - line_height, f"Name: {data[0]}")
-        c.drawString(to_x, box_y + box_height - text_vertical_offset - 2 * line_height, f"Address: {data[1]}")
-        c.drawString(to_x, box_y + box_height - text_vertical_offset - 3 * line_height, f"City: {data[2]}")
-        c.drawString(to_x, box_y + box_height - text_vertical_offset - 4 * line_height, f"Phone: {data[3]}")
+            c.rect(start_x, box_y, box_width, box_height)  # "To" Box
+            c.rect(start_x + box_width + box_spacing, box_y, box_width, box_height)  # "From" Box
 
-        # --- "From" Section (WALI TRADER) ---
-        from_x = start_x + box_width + box_spacing + 10  # X position for "From:" label
-        from_y = box_y + box_height - text_vertical_offset
-        c.setFont("Helvetica-Bold", 10)
-        c.drawString(from_x, from_y, "From: WALI TRADER")
-        c.setFont("Helvetica", 8)
-        c.drawString(from_x, from_y - line_height, "CENTER HAYATABAD")
-        c.drawString(from_x, from_y - 2 * line_height, "All Pakistan Online Cosmetic Delivery")
-        c.drawString(from_x, from_y - 3 * line_height, "P/O Code: 25100")
-        c.drawString(from_x, from_y - 4 * line_height, "Phone: 0307-7199782")
+            # --- "To" Section ---
+            c.setFont("Helvetica", 10)
+            to_x = start_x + 10  # X position for "To:" label
+            c.drawString(to_x, box_y + box_height - text_vertical_offset, "To:")
+            c.drawString(to_x, box_y + box_height - text_vertical_offset - line_height, f"Name: {data[0]}")
+            c.drawString(to_x, box_y + box_height - text_vertical_offset - 2 * line_height, f"Address: {data[1]}")
+            c.drawString(to_x, box_y + box_height - text_vertical_offset - 3 * line_height, f"City: {data[2]}")
+            c.drawString(to_x, box_y + box_height - text_vertical_offset - 4 * line_height, f"Phone: {data[3]}")
 
-        # --- Replace Urdu Text with Image ---
-        image_path = "text.jpg"  # Path to your image file
+            # --- "From" Section (WALI TRADER) ---
+            from_x = start_x + box_width + box_spacing + 10  # X position for "From:" label
+            from_y = box_y + box_height - text_vertical_offset
+            c.setFont("Helvetica-Bold", 10)
+            c.drawString(from_x, from_y, "From: WALI TRADER")
+            c.setFont("Helvetica", 8)
+            c.drawString(from_x, from_y - line_height, "CENTER HAYATABAD")
+            c.drawString(from_x, from_y - 2 * line_height, "All Pakistan Online Cosmetic Delivery")
+            c.drawString(from_x, from_y - 3 * line_height, "P/O Code: 25100")
+            c.drawString(from_x, from_y - 4 * line_height, "Phone: 0307-7199782")
 
-        # Approach 1: Specify Width in Inches
-        image_width_inches = 3  # adjust the number of inches that you want
-        image_width = image_width_inches * 72  # Convert inches to points
-        image_height = image_width / 8.56  # Maintain aspect ratio
-        image_x = (width - image_width) / 2  # Center image horizontally
-        image_y = box_y - 50  # Adjust y position as needed.  Box_y - 20 in original, reduced to 50 to move down
-        c.drawImage(image_path, image_x, image_y, width=image_width, height=image_height, mask='auto')
+            # --- Replace Urdu Text with Image ---
+            image_path = TEXT_IMAGE  # Path to your image file
 
-        # --- Update start_y for the next entry ---
-        start_y -= box_height + 30 + 100  # Move down for the next entry
-        if start_y < 100:
-            c.showPage()
-            start_y = height - 50
+            # Approach 1: Specify Width in Inches
+            image_width_inches = 3  # adjust the number of inches that you want
+            image_width = image_width_inches * 72  # Convert inches to points
+            image_height = image_width / 8.56  # Maintain aspect ratio
+            image_x = (width - image_width) / 2  # Center image horizontally
+            image_y = box_y - 50  # Adjust y position as needed.  Box_y - 20 in original, reduced to 50 to move down
+            c.drawImage(image_path, image_x, image_y, width=image_width, height=image_height, mask='auto')
 
-    c.save()
-    messagebox.showinfo("Success", "PDF Created Successfully!")
+            # --- Update start_y for the next entry ---
+            start_y -= box_height + 30 + 100  # Move down for the next entry
+            if start_y < 100:
+                c.showPage()
+                start_y = height - 50
+
+        c.save()
+        messagebox.showinfo("Success", "PDF Created Successfully!")
+    except Exception as e:
+        messagebox.showerror("Error", f"Error generating PDF: {e}")
+
 # GUI Setup
 root = tk.Tk()
 root.title("Customer Data Entry")
