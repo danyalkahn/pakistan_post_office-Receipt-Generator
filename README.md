@@ -48,8 +48,8 @@ The script is built using Tkinter for the GUI and reportlab for PDF generation. 
 1.  **Clone the repository:**
 
     ```bash
-    git clone [repository URL]
-    cd [repository directory]
+    git clone https://github.com/danyalkahn/pakistan_post_office-Receipt-Generator
+    cd pakistan_post_office-Receipt-Generator
     ```
 
 2.  **Install the required libraries:**
