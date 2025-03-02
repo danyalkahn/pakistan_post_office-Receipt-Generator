@@ -21,9 +21,10 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 script_directory = os.path.dirname(os.path.abspath(__file__))
-# os.chdir(script_directory) # Remove this line
+# os.chdir(script_directory) # Remove this line, this was wrong to do
 
-DATABASE_FILE = resource_path("customer_data.db")
+#DATABASE_FILE = resource_path("customer_data.db") #  Do not call resource path here.
+DATABASE_FILE = "customer_data.db"  # Database will always be in the same directory
 PAKISTAN_POST_LOGO = resource_path("pakistan_post_logo.png")
 TEXT_IMAGE = resource_path("text.jpg")
 
@@ -82,7 +83,7 @@ def save_data():
         messagebox.showerror("Error", f"Error saving data: {e}")
 
 def import_data():
-    global data_list
+    global data_list  # Place the global declaration at the beginning
     try:
         filepath = filedialog.askopenfilename(
             defaultextension=".csv", filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
@@ -90,19 +91,51 @@ def import_data():
         if not filepath:
             return
 
-        with open(filepath, "r", newline="") as file:
-            reader = csv.reader(file)
-            loaded_data = list(reader)
-            print(f"Successfully loaded {len(loaded_data)} records from {filepath}")
-            data_list = loaded_data
+        print(f"Attempting to load data from filepath: {filepath}")  # Debug
+
+        with open(filepath, "r", newline="", encoding="utf-8") as file:  # Try utf-8 (1)
+            reader = csv.reader(file)  # You can add delimiter=";" here if needed (5)
+
+            new_data = [] # start with a blank list
+
+            for row in reader:
+                print("Raw CSV Row:", row)  # Debug: Print the raw row
+
+                if row:  # Skip empty rows (3)
+                    new_data.append(row)
+                else:
+                    print("Skipping empty row")
+
+            print(f"Successfully loaded {len(new_data)} records from {filepath}")
+
+            # Add the imported data to the database
+            conn = sqlite3.connect(DATABASE_FILE)
+            cursor = conn.cursor()
+            for row in new_data:
+                if len(row) >= 5:  # Ensure at least 5 values
+                    cursor.execute(
+                        f"""
+                        INSERT INTO {TABLE_NAME} (name, address, city, phone, price)
+                        VALUES (?, ?, ?, ?, ?)
+                    """,
+                        row[:5],  # Insert the first 5 values
+                    )
+            conn.commit()
+            conn.close()
+
+            # Reload data from the database to update the table
+            load_data()
+
             print(f"Data list after loading: {data_list}")
             update_table()
+
     except FileNotFoundError:
+        messagebox.showerror("Error", f"File not found: {filepath}")  # GUI error message
         print(f"File {filepath} not found.")
         data_list = []
         update_table()
     except Exception as e:
-        messagebox.showerror("Error", f"Error loading data: {e}")
+        messagebox.showerror("Error", f"Error loading data: {e}")  # GUI error message
         print(f"Error loading data: {e}")
         data_list = []
         update_table()
@@ -138,6 +171,7 @@ def add_data():
     update_table()
     clear_fields()
 
+
 def update_table():
     print("Updating the table...")
     for row in tree.get_children():
@@ -156,12 +190,14 @@ def update_table():
     except Exception as e:
         messagebox.showerror("Error", f"Error updating table: {e}")
 
+
 def clear_fields():
     entry_name.delete(0, tk.END)
     entry_address.delete(0, tk.END)
     entry_city.delete(0, tk.END)
     entry_phone.delete(0, tk.END)
     entry_price.delete(0, tk.END)
+
 
 def generate_pdf_selected():
     selected_items = tree.selection()
@@ -179,6 +215,7 @@ def generate_pdf_selected():
     if filename:
         generate_pdf(selected_data, filename)
 
+
 def generate_pdf_all():
     if not data_list:
         messagebox.showwarning("Warning", "No data to generate PDF!")
@@ -190,18 +227,26 @@ def generate_pdf_all():
     if filename:
         generate_pdf(data_list, filename)
 
+
 def generate_pdf_today():
     today = datetime.date.today()
     today_data = []
     for data in data_list:
         if len(data) > 5:
-            try:
-                date_str = data[5].split('T')[0]
-                date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
-                if date == today:
-                    today_data.append(data)
-            except ValueError:
-                print(f"Invalid date format: {data[5]}")
+            date_str = data[5]
+            if date_str:  # Check if date_str is not None or empty
+                try:
+                    date_str = str(date_str) # added fix
+                    date_str = data[5].split('T')[0]
+
+                    date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
+                    if date == today:
+                        today_data.append(data)
+                except ValueError:
+                    print(f"Invalid date format: {data[5]}")
+            else:
+                print("Skipping entry with missing date")  # Track data, add a statement here
+
     if not today_data:
         messagebox.showwarning("Warning", "No data for today to generate PDF!")
         return
@@ -211,6 +256,7 @@ def generate_pdf_today():
     )
     if filename:
         generate_pdf(today_data, filename)
+
 
 def generate_pdf(data_to_print, filename):
     if not data_to_print:
@@ -252,10 +298,10 @@ def generate_pdf(data_to_print, filename):
 
             box_y = current_y - 35 - box_height
 
-            # NEW BOX: Draw the new box ABOVE the "To" and "From" boxes
+            # NEW BOX: Draw the new box ABOVE the "To" Section
             new_box_y = box_y + box_height + 10  # Position it above, add a 10-point gap. Adjust as needed
 
-            c.rect(start_x, new_box_y, new_box_width, new_box_height)  # NEW B
+            c.rect(start_x, new_box_y, new_box_width, new_box_height)  # NEW BOX
 
             c.rect(start_x, box_y, box_width, box_height)  # "To" Box
             c.rect(start_x + box_width + box_spacing, box_y, box_width, box_height)  # "From" Box
@@ -356,3 +402,5 @@ load_data()
 print("load_data() call complete.")
 
 root.mainloop()
+
+
