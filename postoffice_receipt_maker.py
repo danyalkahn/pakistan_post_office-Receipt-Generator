@@ -9,6 +9,7 @@ from reportlab.lib import colors
 from reportlab.lib.units import inch
 import datetime
 import sqlite3
+import re
 
 def resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
@@ -42,8 +43,10 @@ def create_table():
             name TEXT,
             address TEXT,
             city TEXT,
-            phone TEXT,
-            price TEXT,
+            phone NUMBER,
+            price NUMBER,
+            productdetails TEXT,
+            productdetails2 TEXT,
             timestamp TEXT
         )
     """)
@@ -55,7 +58,7 @@ def load_data():
     try:
         conn = sqlite3.connect(DATABASE_FILE)
         cursor = conn.cursor()
-        cursor.execute(f"SELECT name, address, city, phone, price, timestamp FROM {TABLE_NAME}")
+        cursor.execute(f"SELECT name, address, city, phone, price, productdetails, productdetails2, timestamp FROM {TABLE_NAME}")
         loaded_data = cursor.fetchall()
         data_list = list(map(list, loaded_data))
         print(f"Loaded {len(data_list)} records from {DATABASE_FILE}")
@@ -112,13 +115,13 @@ def import_data():
             conn = sqlite3.connect(DATABASE_FILE)
             cursor = conn.cursor()
             for row in new_data:
-                if len(row) >= 5:  # Ensure at least 5 values
+                if len(row) >= 7:  # Ensure at least 7 values
                     cursor.execute(
                         f"""
-                        INSERT INTO {TABLE_NAME} (name, address, city, phone, price)
-                        VALUES (?, ?, ?, ?, ?)
+                        INSERT INTO {TABLE_NAME} (name, address, city, phone, price, productdetails, productdetails2)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
-                        row[:5],  # Insert the first 5 values
+                        row[:7],  # Insert the first 7 values
                     )
             conn.commit()
             conn.close()
@@ -146,9 +149,22 @@ def add_data():
     city = entry_city.get()
     phone = entry_phone.get()
     price = entry_price.get()
+    productdetails = entry_productdetails.get()
+    productdetails2 = entry_productdetails2.get()
 
-    if not (name and address and city and phone and price):
-        messagebox.showwarning("Warning", "Please fill all fields!")
+    # Validate inputs
+    if not re.match("^[a-zA-Z\s]+$", name):
+        messagebox.showwarning("Warning", "Name should contain only English letters and spaces.")
+        return
+    if not re.match("^[0-9]+$", phone):
+        messagebox.showwarning("Warning", "Phone should contain only numbers.")
+        return
+    if not re.match("^[0-9]+$", price):
+        messagebox.showwarning("Warning", "Price should contain only numbers.")
+        return
+
+    if not (name and address and city and phone and price and productdetails):
+        messagebox.showwarning("Warning", "Please fill all required fields!")
         return
 
     timestamp = datetime.datetime.now().isoformat()
@@ -157,10 +173,10 @@ def add_data():
         cursor = conn.cursor()
         cursor.execute(
             f"""
-            INSERT INTO {TABLE_NAME} (name, address, city, phone, price, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO {TABLE_NAME} (name, address, city, phone, price, productdetails, productdetails2, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
-            (name, address, city, phone, price, timestamp),
+            (name, address, city, phone, price, productdetails,productdetails2, timestamp),
         )
         conn.commit()
         conn.close()
@@ -179,13 +195,13 @@ def update_table():
     try:
         conn = sqlite3.connect(DATABASE_FILE)
         cursor = conn.cursor()
-        cursor.execute(f"SELECT name, address, city, phone, price, timestamp FROM {TABLE_NAME}")
+        cursor.execute(f"SELECT name, address, city, phone, price, productdetails, productdetails2, timestamp FROM {TABLE_NAME}")
         data_list = [list(row) for row in cursor.fetchall()]  # Fetch data from the database
         conn.close()
         for i, data in enumerate(data_list):
             if len(data) > 5:
                 print(f"Inserting data: {data[:5]}")
-                tree.insert("", "end", values=(i + 1, *data[:5]))
+                tree.insert("", "end", values=(i + 1, *data[:7]))
         print("Table update complete.")
     except Exception as e:
         messagebox.showerror("Error", f"Error updating table: {e}")
@@ -197,7 +213,8 @@ def clear_fields():
     entry_city.delete(0, tk.END)
     entry_phone.delete(0, tk.END)
     entry_price.delete(0, tk.END)
-
+    entry_productdetails.delete(0, tk.END)
+    entry_productdetails2.delete(0, tk.END)
 
 def generate_pdf_selected():
     selected_items = tree.selection()
@@ -210,7 +227,7 @@ def generate_pdf_selected():
         selected_data.append(data_list[index])
 
     filename = filedialog.asksaveasfilename(
-        defaultextension=".pdf", filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")]
+        defaultextension=".pdf", filetypes=[("CSV files", "*.pdf"), ("All files", "*.*")]
     )
     if filename:
         generate_pdf(selected_data, filename)
@@ -222,7 +239,7 @@ def generate_pdf_all():
         return
 
     filename = filedialog.asksaveasfilename(
-        defaultextension=".pdf", filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")]
+        defaultextension=".pdf", filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
     )
     if filename:
         generate_pdf(data_list, filename)
@@ -233,17 +250,17 @@ def generate_pdf_today():
     today_data = []
     for data in data_list:
         if len(data) > 5:
-            date_str = data[5]
+            date_str = data[7] # use details field here
             if date_str:  # Check if date_str is not None or empty
                 try:
                     date_str = str(date_str) # added fix
-                    date_str = data[5].split('T')[0]
+                    date_str = data[7].split('T')[0]
 
                     date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
                     if date == today:
                         today_data.append(data)
                 except ValueError:
-                    print(f"Invalid date format: {data[5]}")
+                    print(f"Invalid date format: {data[7]}")
             else:
                 print("Skipping entry with missing date")  # Track data, add a statement here
 
@@ -279,6 +296,7 @@ def generate_pdf(data_to_print, filename):
         box_height = 110
         text_vertical_offset = 35
         box_spacing = 20
+        details_x_offset = 80 # added offset
 
         to_x = start_x + 10
         from_x = start_x + box_width + box_spacing + 10
@@ -303,8 +321,8 @@ def generate_pdf(data_to_print, filename):
 
             c.rect(start_x, new_box_y, new_box_width, new_box_height)  # NEW BOX
 
-            c.rect(start_x, box_y, box_width, box_height)  # "To" Box
-            c.rect(start_x + box_width + box_spacing, box_y, box_width, box_height)  # "From" Box
+            c.rect(start_x, box_y-22, box_width, box_height+22)  # "To" Box
+            c.rect(start_x + box_width + box_spacing, box_y-22, box_width, box_height+22)  # "From" Box
 
             # --- "To" Section ---
             c.setFont("Helvetica", 10)
@@ -314,6 +332,14 @@ def generate_pdf(data_to_print, filename):
             c.drawString(to_x, box_y + box_height - text_vertical_offset - 2 * line_height, f"Address: {data[1]}")
             c.drawString(to_x, box_y + box_height - text_vertical_offset - 3 * line_height, f"City: {data[2]}")
             c.drawString(to_x, box_y + box_height - text_vertical_offset - 4 * line_height, f"Phone: {data[3]}")
+
+            # productdetails
+            c.setFont("Helvetica-Bold", 10) # Set font to bold before printing "productdetails:"
+            c.drawString(to_x, box_y + box_height - text_vertical_offset - 5 * line_height, "Product Details:")
+            c.setFont("Helvetica", 10) # Reset font to regular for the actual details
+            c.drawString(to_x + details_x_offset, box_y + box_height - text_vertical_offset - 5 * line_height, f"{data[5]}")
+            c.drawString(to_x, box_y + box_height - text_vertical_offset - 6 * line_height, f"{data[6]}")
+
 
             # --- "From" Section (WALI TRADER) ---
             from_x = start_x + box_width + box_spacing + 10  # X position for "From:" label
@@ -377,21 +403,28 @@ ttk.Label(root, text="Price").grid(row=4, column=0)
 entry_price = ttk.Entry(root)
 entry_price.grid(row=4, column=1)
 
+ttk.Label(root, text="Details").grid(row=5, column=0)  # Changed row number
+entry_productdetails = ttk.Entry(root)
+entry_productdetails.grid(row=5, column=1) # Changed row number
+ttk.Label(root, text="Details2").grid(row=6, column=0)  # Changed row number
+entry_productdetails2 = ttk.Entry(root)
+entry_productdetails2.grid(row=6, column=1) # Changed row number
+
 # Buttons
-ttk.Button(root, text="Add Data", command=add_data).grid(row=5, column=0)
-ttk.Button(root, text="Generate PDF (Selected)", command=generate_pdf_selected).grid(row=5, column=1)
-ttk.Button(root, text="Generate PDF (All Data)", command=generate_pdf_all).grid(row=5, column=2)
-ttk.Button(root, text="Generate PDF (Today's Data)", command=generate_pdf_today).grid(row=5, column=3)
-ttk.Button(root, text="Import Data", command=import_data).grid(row=5, column=4)
-ttk.Button(root, text="Export Data", command=save_data).grid(row=5, column=5)
+ttk.Button(root, text="Add Data", command=add_data).grid(row=7, column=0) # Changed row number
+ttk.Button(root, text="Generate PDF (Selected)", command=generate_pdf_selected).grid(row=7, column=1) # Changed row number
+ttk.Button(root, text="Generate PDF (All Data)", command=generate_pdf_all).grid(row=7, column=2) # Changed row number
+ttk.Button(root, text="Generate PDF (Today's Data)", command=generate_pdf_today).grid(row=7, column=3) # Changed row number
+ttk.Button(root, text="Import Data", command=import_data).grid(row=7, column=4) # Changed row number
+ttk.Button(root, text="Export Data", command=save_data).grid(row=7, column=5) # Changed row number
 
 # Table
-columns = ("#", "Name", "Address", "City", "Phone", "Price")
+columns = ("#", "Name", "Address", "City", "Phone", "Price", "productdetails", "productdetails2")
 tree = ttk.Treeview(root, columns=columns, show="headings", selectmode="extended")
 for col in columns:
     tree.heading(col, text=col)
     tree.column(col, width=100)
-tree.grid(row=6, column=0, columnspan=6)
+tree.grid(row=8, column=0, columnspan=6) # Changed row number
 
 # Create the table if it doesn't exist
 create_table()
@@ -402,5 +435,3 @@ load_data()
 print("load_data() call complete.")
 
 root.mainloop()
-
-
