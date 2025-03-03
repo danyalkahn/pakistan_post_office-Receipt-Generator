@@ -227,10 +227,11 @@ def generate_pdf_selected():
         selected_data.append(data_list[index])
 
     filename = filedialog.asksaveasfilename(
-        defaultextension=".pdf", filetypes=[("CSV files", "*.pdf"), ("All files", "*.*")]
+        defaultextension=".pdf", filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")]
     )
     if filename:
         generate_pdf(selected_data, filename)
+
 
 
 def generate_pdf_all():
@@ -239,7 +240,7 @@ def generate_pdf_all():
         return
 
     filename = filedialog.asksaveasfilename(
-        defaultextension=".pdf", filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+        defaultextension=".pdf", filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")]
     )
     if filename:
         generate_pdf(data_list, filename)
